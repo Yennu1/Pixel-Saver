@@ -3,7 +3,15 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Treasure Hunter — Pixel Savings Tracker</title>
+<title>Pixel Save — Pixel Savings Tracker</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#f5c344">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pixel Save">
+<link rel="apple-touch-icon" href="/icon.svg">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -969,20 +977,12 @@ function loadState() {
   } catch { return null; }
 }
 
-/* ---------- Unicode-safe Base64 encode/decode pipeline ----------
-   btoa() is byte-oriented and chokes on any code point > 0xFF — so emoji,
-   smart quotes, accents, etc. would all throw. We bridge through UTF-8
-   bytes (TextEncoder/Decoder) so the entire state survives the round-trip.
-
-   Encode:  state -> JSON.stringify -> UTF-8 bytes -> base64 -> URI-encode
-   Decode:  URI-decode -> base64 -> UTF-8 bytes -> JSON.parse
-*/
+/* ---------- Base64 helpers (Unicode-safe via UTF-8 bridge) ---------- */
 function bytesToBase64(bytes) {
   let binary = "";
   const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
+  for (let i = 0; i < bytes.length; i += CHUNK)
     binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
-  }
   return btoa(binary);
 }
 function base64ToBytes(b64) {
@@ -991,25 +991,67 @@ function base64ToBytes(b64) {
   for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
   return out;
 }
+// URL-safe base64 (no encodeURIComponent needed — safe in query strings as-is)
+function toB64url(bytes) {
+  return bytesToBase64(bytes).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+function fromB64url(s) {
+  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
+  return base64ToBytes(b64 + "=".repeat((4 - b64.length % 4) % 4));
+}
+
+/* ---------- Compact state encode/decode (v2 format) ----------
+   v1 (old): JSON.stringify(stateObject) → UTF-8 bytes → base64 → encodeURIComponent
+             ~1,800 URL chars for a half-filled grid.
+   v2 (new): pack 260 booleans into a 33-byte bitfield → 44-char b64url string,
+             then store the rest as a tight JSON array → URL-safe base64.
+             ~150 URL chars total — roughly 12× shorter.
+*/
+const GRID_CELLS = 260; // must match DENOM_DIST sum
 function encodeStateToParam(state) {
-  const json = JSON.stringify(state);
-  const bytes = new TextEncoder().encode(json);
-  const b64 = bytesToBase64(bytes);
-  return encodeURIComponent(b64);
+  const { seed, checked, info, reachedMilestones, mode } = state;
+  const bits = new Uint8Array(Math.ceil(checked.length / 8));
+  checked.forEach((v, i) => { if (v) bits[i >> 3] |= (1 << (i & 7)); });
+  const compact = [
+    2,                                      // version tag
+    seed,
+    toB64url(bits),                         // ~44 chars for 260 cells
+    info.name || "",
+    info.savingFor || "",
+    info.startDate || "",
+    info.endDate || "",
+    reachedMilestones.join(","),
+    mode === "day" ? 1 : 0,
+  ];
+  return toB64url(new TextEncoder().encode(JSON.stringify(compact)));
 }
 function decodeStateFromParam(param) {
+  // Try new v2 compact format first
   try {
-    const b64 = decodeURIComponent(param);
-    const bytes = base64ToBytes(b64);
-    const json = new TextDecoder().decode(bytes);
-    const parsed = JSON.parse(json);
-    // Light shape validation — refuse anything that doesn't look like our state.
-    if (!parsed || typeof parsed !== "object") return null;
-    if (!Array.isArray(parsed.checked)) return null;
-    return parsed;
-  } catch {
+    const parsed = JSON.parse(new TextDecoder().decode(fromB64url(param)));
+    if (Array.isArray(parsed) && parsed[0] === 2) {
+      const [, seed, b64bits, name, savingFor, startDate, endDate, msStr, modeInt] = parsed;
+      const bits = fromB64url(b64bits);
+      const checked = Array.from({ length: GRID_CELLS }, (_, i) => !!(bits[i >> 3] & (1 << (i & 7))));
+      return {
+        seed: Number(seed),
+        checked,
+        info: { name: name || "", savingFor: savingFor || "", startDate: startDate || "", endDate: endDate || "" },
+        reachedMilestones: msStr ? msStr.split(",").map(Number).filter(Boolean) : [],
+        mode: modeInt === 1 ? "day" : "night",
+      };
+    }
+    // v2 envelope but unrecognised version — bail
     return null;
-  }
+  } catch { /* fall through to legacy */ }
+
+  // Legacy v1 format: URL-encoded standard base64 of JSON object
+  try {
+    const bytes = base64ToBytes(decodeURIComponent(param));
+    const parsed = JSON.parse(new TextDecoder().decode(bytes));
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.checked)) return null;
+    return parsed;
+  } catch { return null; }
 }
 function loadStateFromUrlOrStorage() {
   try {
@@ -1656,8 +1698,8 @@ function App() {
     const shareUrl = window.location.origin + window.location.pathname + "?" + SHARE_PARAM + "=" + encoded;
     const captain = (info.name && info.name.trim()) || "a buccaneer";
     const sharePayload = {
-      title: `Treasure Hunter \u2014 ${captain}'s Voyage`,
-      text: `I've saved GHC ${total.toLocaleString()} of my GHC ${goal.toLocaleString()} goal! Join my crew \uD83C\uDFF4\u200D\u2620\uFE0F`,
+      title: `Pixel Save \u2014 ${captain}'s Progress`,
+      text: `I've saved GHC ${total.toLocaleString()} of my GHC ${goal.toLocaleString()} goal! Check out my Pixel Save tracker \uD83D\uDCB0`,
       url: shareUrl,
     };
 
@@ -1716,7 +1758,7 @@ function App() {
               color: "var(--gold)",
               textShadow: "3px 3px 0 #000, 6px 6px 0 #c98f1c"
             }}>
-            TREASURE&nbsp;HUNTER
+            PIXEL&nbsp;SAVE
           </h1>
           <div className="pixel-h text-[10px] md:text-xs mt-3" style={{color:"var(--bone)"}}>
             ── a savings tracker for buccaneers ──
@@ -1897,6 +1939,14 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 </script>
 </body>
 </html>

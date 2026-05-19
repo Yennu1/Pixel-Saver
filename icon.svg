@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" shape-rendering="crispEdges">
+  <!-- Background -->
+  <rect width="32" height="32" fill="#0a1a3a"/>
+  <!-- Coin body -->
+  <rect x="7" y="5" width="18" height="22" fill="#f5c344"/>
+  <!-- Coin bevel top/left (highlight) -->
+  <rect x="7" y="5" width="18" height="2" fill="#fff1a8"/>
+  <rect x="7" y="5" width="2" height="22" fill="#fff1a8"/>
+  <!-- Coin bevel bottom/right (shadow) -->
+  <rect x="7" y="25" width="18" height="2" fill="#a06c1f"/>
+  <rect x="23" y="5" width="2" height="22" fill="#a06c1f"/>
+  <!-- Inner face -->
+  <rect x="9" y="7" width="14" height="18" fill="#f5c344"/>
+  <!-- Coin slot at top (piggy-bank / save icon) -->
+  <rect x="13" y="5" width="6" height="2" fill="#0a1a3a"/>
+  <rect x="14" y="4" width="4" height="1" fill="#0a1a3a"/>
+  <!-- Dollar sign — vertical bar -->
+  <rect x="15" y="10" width="2" height="12" fill="#a06c1f"/>
+  <!-- Dollar sign — top curve -->
+  <rect x="13" y="10" width="5" height="2" fill="#a06c1f"/>
+  <rect x="12" y="12" width="2" height="2" fill="#a06c1f"/>
+  <!-- Dollar sign — middle bar -->
+  <rect x="12" y="14" width="8" height="2" fill="#a06c1f"/>
+  <!-- Dollar sign — bottom curve -->
+  <rect x="18" y="16" width="2" height="2" fill="#a06c1f"/>
+  <rect x="13" y="18" width="5" height="2" fill="#a06c1f"/>
+</svg>
