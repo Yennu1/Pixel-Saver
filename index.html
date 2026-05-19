@@ -1,0 +1,1902 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Treasure Hunter — Pixel Savings Tracker</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
+<script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/framer-motion@11.11.17/dist/framer-motion.js"></script>
+
+<style>
+  :root {
+    --abyss: #0a1626;
+    --deep: #0f2238;
+    --hull: #1a3553;
+    --plank: #c79152;
+    --gold: #f5c344;
+    --gold-hi: #fff1a8;
+    --gold-lo: #a06c1f;
+    --bone: #f3ead2;
+    --rust: #c84a3a;
+    --teal: #4fb3a9;
+    --grid-ink: #5a7a9c;
+  }
+  html, body { background: #0a1a3a; overflow-x: hidden; }
+  /* CRITICAL: every raster surface stays crunchy */
+  *, img, canvas, svg { image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
+  body {
+    font-family: 'VT323', 'Courier New', monospace;
+    color: var(--bone);
+    font-size: 20px;
+    image-rendering: pixelated;
+    background-color: #0a1a3a;
+    background-image:
+      /* faint compass-rose at top-right */
+      radial-gradient(circle at 88% 12%, rgba(245,195,68,.06) 0 60px, transparent 62px),
+      /* dashed map route */
+      repeating-linear-gradient(38deg, rgba(245,195,68,.05) 0 12px, transparent 12px 28px),
+      /* faint grid (sea chart) */
+      linear-gradient(rgba(180,210,239,.04) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, rgba(180,210,239,.04) 1px, transparent 1px) 0 0 / 32px 32px,
+      /* star dots */
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.06) 0 1px, transparent 2px),
+      radial-gradient(circle at 78% 62%, rgba(255,255,255,.07) 0 1px, transparent 2px),
+      radial-gradient(circle at 42% 88%, rgba(255,255,255,.05) 0 1px, transparent 2px),
+      radial-gradient(circle at 22% 72%, rgba(255,255,255,.05) 0 1px, transparent 2px),
+      radial-gradient(circle at 62% 22%, rgba(255,255,255,.05) 0 1px, transparent 2px),
+      /* deep sea gradient */
+      linear-gradient(180deg, #0a1a3a 0%, #102544 45%, #16305a 100%);
+    background-attachment: fixed;
+  }
+  .pixel-h { font-family: 'Press Start 2P', monospace; letter-spacing: 1px; }
+  .pixel-input {
+    font-family: 'VT323', monospace;
+    background: #0a1626;
+    color: var(--bone);
+    border: 0;
+    outline: 0;
+    width: 100%;
+  }
+  .pixel-input::placeholder { color: #4a6b8c; }
+
+  /* Chunky 3D pixel border using box-shadow steps */
+  .pixel-card {
+    background: rgba(15, 34, 56, .78);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    box-shadow:
+      0 0 0 4px #000,
+      0 0 0 8px var(--bone),
+      0 0 0 12px #000,
+      inset 0 0 0 2px #2a4868;
+  }
+  .pixel-panel {
+    background: rgba(15, 34, 56, .74);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    box-shadow:
+      0 0 0 3px #000,
+      0 0 0 6px #f3ead2,
+      0 0 0 9px #000;
+  }
+  .pixel-cell {
+    image-rendering: pixelated;
+    transition: transform 60ms steps(1);
+    user-select: none;
+  }
+  .pixel-cell:active { transform: translate(1px, 1px); }
+  .cell-empty {
+    background: #102a45;
+    color: #6f93b8;
+    box-shadow:
+      inset 0 0 0 2px #1f3e60,
+      inset 2px 2px 0 0 #2c537a,
+      inset -2px -2px 0 0 #061425;
+  }
+  .cell-empty:hover {
+    background: #163558;
+    color: #b4d2ef;
+    box-shadow:
+      inset 0 0 0 2px #2c5b89,
+      inset 2px 2px 0 0 #3e7bb0,
+      inset -2px -2px 0 0 #061425;
+  }
+  /* HIGH-VALUE ACCENTS — 100 and 200 get tinted empty states so their
+     smaller numbers stay readable on tiny mobile cells. */
+  .cell-empty.tier-100 {
+    background: #2a1a3a;
+    color: #e3b9ed;
+    box-shadow:
+      inset 0 0 0 2px #7a3a8a,
+      inset 2px 2px 0 0 #a35cb3,
+      inset -2px -2px 0 0 #1a0a26;
+  }
+  .cell-empty.tier-100:hover {
+    background: #3a2450;
+    color: #f0d4f6;
+    box-shadow:
+      inset 0 0 0 2px #a35cb3,
+      inset 2px 2px 0 0 #c98ad6,
+      inset -2px -2px 0 0 #1a0a26;
+  }
+  .cell-empty.tier-200 {
+    background: #3a2010;
+    color: #ffc97a;
+    box-shadow:
+      inset 0 0 0 2px #c98f1c,
+      inset 2px 2px 0 0 #f5c344,
+      inset -2px -2px 0 0 #1a0a06;
+  }
+  .cell-empty.tier-200:hover {
+    background: #4a2c14;
+    color: #ffe2a8;
+    box-shadow:
+      inset 0 0 0 2px #f5c344,
+      inset 2px 2px 0 0 #fff1a8,
+      inset -2px -2px 0 0 #1a0a06;
+  }
+  .cell-filled {
+    background: linear-gradient(180deg, #ffd84d 0%, #f5c344 45%, #c98f1c 100%);
+    color: #2a1c00;
+    box-shadow:
+      inset 0 0 0 2px #2a1c00,
+      inset 3px 3px 0 0 #fff1a8,
+      inset -3px -3px 0 0 #8a5c10,
+      0 0 8px rgba(245,195,68,.25);
+    text-shadow: 1px 1px 0 #fff1a8;
+  }
+
+  /* Retro chunky button */
+  .pixel-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    padding: 10px 14px;
+    background: var(--gold);
+    color: #2a1c00;
+    box-shadow:
+      0 0 0 3px #000,
+      inset 2px 2px 0 0 var(--gold-hi),
+      inset -2px -2px 0 0 var(--gold-lo);
+    cursor: pointer;
+  }
+  .pixel-btn:active { transform: translate(1px,1px); }
+  .pixel-btn.danger { background: var(--rust); color: var(--bone); }
+  .pixel-btn.danger { box-shadow: 0 0 0 3px #000, inset 2px 2px 0 0 #ff8a7a, inset -2px -2px 0 0 #6e1d12; }
+
+  /* Progress */
+  .progress-track {
+    background:
+      repeating-linear-gradient(90deg, #0a1626 0 6px, #0c1d33 6px 12px);
+    box-shadow:
+      0 0 0 3px #000,
+      inset 0 0 0 3px #2c537a,
+      inset 0 0 0 5px #000;
+    height: 44px;
+    position: relative;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background:
+      linear-gradient(180deg, #ffd84d 0%, #f5c344 50%, #c98f1c 100%);
+    box-shadow: inset 0 -3px 0 0 #a06c1f, inset 0 3px 0 0 #fff1a8;
+    transition: width 350ms steps(20);
+    position: relative;
+  }
+  .progress-fill::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 4px, transparent 4px 12px);
+    mix-blend-mode: overlay;
+  }
+  .milestone-marker {
+    position: absolute; top: -8px; bottom: -8px; width: 4px; background: #f3ead2;
+    box-shadow: 0 0 0 2px #000;
+  }
+  .milestone-label {
+    position: absolute; top: -22px; transform: translateX(-50%);
+    font-family: 'Press Start 2P', monospace; font-size: 8px; color: #b4d2ef;
+  }
+
+  /* Wave bottom */
+  .wave {
+    height: 18px;
+    background:
+      radial-gradient(circle at 6px 14px, var(--abyss) 6px, transparent 7px) repeat-x,
+      linear-gradient(180deg, #102a45 0%, #102a45 100%);
+    background-size: 12px 18px, auto;
+  }
+
+  /* CRT flicker overlay */
+  .crt::before {
+    content: "";
+    position: fixed; inset: 0; pointer-events: none; z-index: 100;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.12) 0 2px, transparent 2px 4px);
+    mix-blend-mode: multiply;
+  }
+
+  /* Sparkle keyframes */
+  @keyframes pop {
+    0%   { transform: translate(-50%,-50%) scale(.4); opacity: 0; }
+    20%  { transform: translate(-50%,-50%) scale(1.15); opacity: 1; }
+    80%  { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(.9); opacity: 0; }
+  }
+  @keyframes bob {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+  @keyframes float-up {
+    0%   { transform: translate(-50%, 0) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -28px) scale(1.1); opacity: 0; }
+  }
+  @keyframes confetti-fall {
+    0% { transform: translateY(-10vh) rotate(0); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+  @keyframes slash {
+    0% { transform: translate(-50%,-50%) rotate(-45deg) scaleX(0); opacity: 0; }
+    20% { transform: translate(-50%,-50%) rotate(-45deg) scaleX(1); opacity: 1; }
+    100% { transform: translate(-50%,-50%) rotate(-45deg) scaleX(1.2); opacity: 0; }
+  }
+  @keyframes flash-text {
+    0%, 49% { color: #f5c344; transform: scale(1); }
+    50%, 100% { color: #fff1a8; transform: scale(1.04); }
+  }
+  @keyframes finale-zoom {
+    0% { transform: scale(.4); opacity: 0; }
+    60% { transform: scale(1.08); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes rays {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .flash-text { animation: flash-text 280ms steps(1) infinite; }
+  .bob { animation: bob 700ms steps(2) infinite; }
+
+  /* QR substitute */
+  .qr {
+    width: 64px; height: 64px;
+    background-image:
+      linear-gradient(#f3ead2, #f3ead2),
+      linear-gradient(#f3ead2, #f3ead2),
+      linear-gradient(#f3ead2, #f3ead2);
+    background:
+      conic-gradient(from 0deg at 50% 50%, #f3ead2 25%, transparent 0 50%, #f3ead2 0 75%, transparent 0) 0 0/16px 16px,
+      #0a1626;
+    box-shadow: 0 0 0 4px #f3ead2, 0 0 0 7px #000;
+  }
+
+  /* hide scrollbars on body */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-thumb { background: #2c537a; border: 2px solid #000; }
+  ::-webkit-scrollbar-track { background: #0a1626; }
+
+  /* Hidden scrollbar for the horizontally-scrollable treasure map on mobile.
+     Keeps touch-swipe working while making the rail invisible (app-like). */
+  .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .custom-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+  /* Edge fade hint so users discover the swipe affordance on mobile */
+  .map-scroll-wrap { position: relative; }
+  .map-scroll-wrap::after {
+    content: "";
+    position: absolute; top: 0; bottom: 0; right: 0; width: 28px;
+    background: linear-gradient(90deg, rgba(10,22,38,0) 0%, rgba(10,22,38,.85) 100%);
+    pointer-events: none;
+  }
+  @media (min-width: 768px) {
+    .map-scroll-wrap::after { display: none; }
+  }
+
+  /* ---------- SEA SCENE (background) ---------- */
+  .sea-scene {
+    position: fixed; inset: 0; z-index: 0;
+    pointer-events: none; overflow: hidden;
+  }
+  .sea-sky {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 80% 30%, rgba(245,195,68,.08) 0 30%, transparent 60%),
+      linear-gradient(180deg, #0a1a3a 0%, #102544 38%, #16305a 55%, #0e2a4e 100%);
+    transition: background 600ms steps(8);
+  }
+  /* DAY: bright blue sky */
+  .sea-scene.day .sea-sky {
+    background:
+      radial-gradient(ellipse at 78% 22%, rgba(255,236,160,.55) 0 14%, rgba(255,236,160,0) 36%),
+      linear-gradient(180deg, #8ec9ee 0%, #b3dcef 28%, #6cb6df 52%, #3a85b8 100%);
+  }
+  .sea-scene.day .sea-stars { opacity: 0; }
+  .sea-scene.day .sea-moon {
+    background: #ffe25a;
+    box-shadow:
+      0 0 0 4px rgba(255,226,90,.35),
+      0 0 0 14px rgba(255,226,90,.18),
+      0 0 0 26px rgba(255,226,90,.08),
+      inset -8px -6px 0 0 #f5b820;
+  }
+  .sea-scene.day .sea-horizon { background: rgba(255,255,255,.45); }
+  /* DAY wave palette */
+  .sea-scene.day .wave-far {
+    background-image:
+      radial-gradient(circle at 8px 12px, #5fa3ce 6px, transparent 7px),
+      radial-gradient(circle at 24px 14px, #4a8ab8 5px, transparent 6px);
+  }
+  .sea-scene.day .wave-mid {
+    background-image:
+      radial-gradient(circle at 10px 16px, #3a7cb0 8px, transparent 9px),
+      radial-gradient(circle at 30px 18px, #2c6a9a 7px, transparent 8px);
+  }
+  .sea-scene.day .wave-near {
+    background-image:
+      radial-gradient(circle at 14px 22px, #1f5a86 11px, transparent 12px),
+      radial-gradient(circle at 42px 26px, #15466c 10px, transparent 11px);
+  }
+  .sea-scene.day .wave-foam {
+    background-image:
+      radial-gradient(circle at 14px 12px, rgba(255,255,255,.5) 2px, transparent 3px),
+      radial-gradient(circle at 42px 16px, rgba(255,255,255,.6) 2px, transparent 3px);
+  }
+  .sea-scene.day .sea-deep {
+    background: linear-gradient(180deg, rgba(31,90,134,.55) 0%, rgba(21,70,108,.7) 100%);
+  }
+  .sea-scene.day .sea-dim {
+    background: linear-gradient(180deg, rgba(180,210,239,.05) 0%, rgba(58,133,184,.18) 100%);
+  }
+  /* a few seagulls only in day */
+  .seagull {
+    position: absolute;
+    width: 6px; height: 2px;
+    background: transparent;
+    display: none;
+  }
+  .sea-scene.day .seagull { display: block; }
+  .seagull::before, .seagull::after {
+    content: "";
+    position: absolute;
+    width: 6px; height: 2px;
+    background: #2a3a4a;
+  }
+  .seagull::before { left: -6px; transform: rotate(20deg); }
+  .seagull::after  { left: 4px;  transform: rotate(-20deg); }
+  .seagull.g1 { top: 12%; left: 22%; animation: drift-l 30s linear infinite; }
+  .seagull.g2 { top: 8%;  left: 48%; animation: drift-l 38s linear infinite; }
+  .seagull.g3 { top: 16%; left: 62%; animation: drift-l 34s linear infinite; }
+  .sea-moon {
+    position: absolute; top: 8%; right: 12%;
+    width: 56px; height: 56px;
+    background: #f3ead2;
+    box-shadow:
+      0 0 0 4px rgba(243,234,210,.08),
+      0 0 0 12px rgba(243,234,210,.04),
+      inset -10px -8px 0 0 #c9b97a;
+    border-radius: 0; /* pixel moon */
+    transition: background 600ms steps(8), box-shadow 600ms steps(8);
+  }
+  .sea-stars {
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.7) 0 1.5px, transparent 2px),
+      radial-gradient(circle at 78% 14%, rgba(255,255,255,.6) 0 1.5px, transparent 2px),
+      radial-gradient(circle at 42% 8%, rgba(255,255,255,.5) 0 1px, transparent 2px),
+      radial-gradient(circle at 22% 28%, rgba(255,255,255,.5) 0 1px, transparent 2px),
+      radial-gradient(circle at 62% 22%, rgba(255,255,255,.6) 0 1.5px, transparent 2px),
+      radial-gradient(circle at 92% 26%, rgba(255,255,255,.45) 0 1px, transparent 2px);
+    transition: opacity 600ms steps(8);
+  }
+  .sea-horizon {
+    position: absolute; left: 0; right: 0; top: 48%;
+    height: 2px;
+    background: rgba(180,210,239,.25);
+  }
+
+  /* Wave layers (3 parallax bands) */
+  .wave-band {
+    position: absolute; left: -200%; width: 500%;
+    height: 36px;
+    background-repeat: repeat-x;
+    image-rendering: pixelated;
+  }
+  /* Wave shape made from layered radial gradients to look like pixel crests */
+  .wave-far {
+    top: 28%;
+    height: 18px;
+    background-image:
+      radial-gradient(circle at 8px 12px, #2c537a 6px, transparent 7px),
+      radial-gradient(circle at 24px 14px, #1f3e60 5px, transparent 6px);
+    background-size: 32px 18px, 32px 18px;
+    background-position: 0 0, 16px 0;
+    animation: drift-l 60s linear infinite;
+    opacity: .9;
+  }
+  .wave-mid {
+    top: 36%;
+    height: 24px;
+    background-image:
+      radial-gradient(circle at 10px 16px, #1a3553 8px, transparent 9px),
+      radial-gradient(circle at 30px 18px, #102a45 7px, transparent 8px);
+    background-size: 40px 24px, 40px 24px;
+    background-position: 0 0, 20px 0;
+    animation: drift-l 38s linear infinite;
+  }
+  .wave-near {
+    top: 45%;
+    height: 36px;
+    background-image:
+      radial-gradient(circle at 14px 22px, #0f2238 11px, transparent 12px),
+      radial-gradient(circle at 42px 26px, #081427 10px, transparent 11px);
+    background-size: 56px 36px, 56px 36px;
+    background-position: 0 0, 28px 0;
+    animation: drift-l 22s linear infinite;
+  }
+  .wave-foam {
+    top: 45%;
+    height: 36px;
+    background-image:
+      radial-gradient(circle at 14px 12px, rgba(243,234,210,.18) 2px, transparent 3px),
+      radial-gradient(circle at 42px 16px, rgba(243,234,210,.22) 2px, transparent 3px);
+    background-size: 56px 36px, 56px 36px;
+    animation: drift-l 14s linear infinite;
+  }
+  .sea-deep {
+    position: absolute; left: 0; right: 0; top: 58%; bottom: 0;
+    background: linear-gradient(180deg, rgba(8,20,39,.55) 0%, rgba(5,14,28,.7) 100%);
+  }
+  /* readability dim over the scene */
+  .sea-dim {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,22,38,.10) 0%, rgba(10,22,38,.20) 100%);
+  }
+
+  @keyframes drift-l {
+    from { transform: translate3d(0,0,0); }
+    to   { transform: translate3d(-25%,0,0); }
+  }
+  @keyframes bob-ship {
+    0%,100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-2px) rotate(-.6deg); }
+    50% { transform: translateY(0) rotate(0deg); }
+    75% { transform: translateY(2px) rotate(.6deg); }
+  }
+  @keyframes sail-east {
+    from { left: -12%; }
+    to   { left: 78%; }
+  }
+  .ship-anchor {
+    position: absolute;
+    top: 18%;
+    animation: sail-east 90s linear infinite;
+  }
+  .ship-bob { animation: bob-ship 1400ms steps(4) infinite; }
+  .island-anchor {
+    position: absolute;
+    right: 4%;
+    top: 8%;
+  }
+  .island-bob { animation: bob-ship 6s ease-in-out infinite; }
+
+  /* Pixel sprite ship made from divs (no SVG) */
+  .ship {
+    position: absolute; bottom: 4px;
+    width: 44px; height: 36px;
+    transform: translateX(-50%);
+    transition: left 450ms steps(18);
+  }
+</style>
+</head>
+<template id="__bundler_thumbnail" data-bg-color="#0a1a3a">
+  <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+    <rect width="120" height="120" fill="#0a1a3a"/>
+    <!-- skull (cream squares) -->
+    <g fill="#f3ead2">
+      <rect x="42" y="30" width="36" height="6"/>
+      <rect x="36" y="36" width="48" height="6"/>
+      <rect x="30" y="42" width="60" height="18"/>
+      <rect x="30" y="60" width="60" height="6"/>
+      <rect x="36" y="66" width="48" height="6"/>
+      <rect x="42" y="72" width="36" height="6"/>
+    </g>
+    <!-- eye sockets -->
+    <g fill="#0a1a3a">
+      <rect x="42" y="48" width="12" height="12"/>
+      <rect x="66" y="48" width="12" height="12"/>
+      <rect x="54" y="66" width="12" height="6"/>
+    </g>
+    <!-- crossed cutlasses (plank color) -->
+    <g fill="#c79152">
+      <rect x="18" y="84" width="84" height="6"/>
+      <rect x="18" y="84" width="6" height="6"/>
+      <rect x="96" y="84" width="6" height="6"/>
+    </g>
+    <!-- gold coin accent -->
+    <g fill="#f5c344">
+      <rect x="54" y="96" width="12" height="12"/>
+    </g>
+  </svg>
+</template>
+
+<body class="crt">
+
+<div id="root"></div>
+
+<script type="text/babel" data-presets="env,react">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const { motion, AnimatePresence } = window.framerMotion || window.Motion || {};
+
+/* ---------- Generate the denomination grid ---------- */
+// Distribution that sums to 10,000 with 260 cells (13 cols × 20 rows)
+const DENOM_DIST = { 5: 60, 10: 60, 20: 55, 50: 40, 100: 30, 200: 15 };
+const COLS = 13;
+
+function mulberry32(seed) {
+  return function() {
+    let t = seed += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function buildGrid(seed = 42) {
+  const cells = [];
+  Object.entries(DENOM_DIST).forEach(([d, n]) => {
+    for (let i = 0; i < n; i++) cells.push(Number(d));
+  });
+  const rng = mulberry32(seed);
+  for (let i = cells.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [cells[i], cells[j]] = [cells[j], cells[i]];
+  }
+  return cells;
+}
+
+/* ---------- Audio: useRetroAudio hook ----------
+   - Procedurally synthesizes chiptune SFX via Web Audio (square/triangle/noise).
+   - If a real file exists at sounds/<name>.mp3, it overrides the synth at runtime.
+   - Concurrent playback: every trigger spawns a fresh oscillator chain, no cutoff.
+   - Browser autoplay safe: AudioContext is created lazily on first user gesture.
+   - Mute state lives in localStorage.
+*/
+const MUTE_KEY = "treasure-hunter-muted-v1";
+
+const SFX_RECIPES = {
+  // UI
+  ui_hover:    { kind: "blip", freq: 880, dur: 0.04, type: "square",   gain: 0.05 },
+  ui_click:    { kind: "blip", freq: 220, dur: 0.07, type: "square",   gain: 0.10, sweep: -120 },
+  uncheck:     { kind: "blip", freq: 360, dur: 0.06, type: "triangle", gain: 0.08, sweep: -160 },
+  // Crew (mapped by denomination — names match the spec semantically)
+  coin_kaching:  { kind: "kaching" },           // 5 — Navigator
+  laser_shoot:   { kind: "laser" },             // 10 — Sharpshot
+  powerup_short: { kind: "powerup" },           // 20 — Cook
+  sword_slash:   { kind: "slash" },             // 50 — Sword Captain
+  mystic_chime:  { kind: "chime" },             // 100 — Scholar
+  heavy_mech:    { kind: "mech" },              // 200 — Engineer
+  // Game
+  level_up:      { kind: "levelup" },
+  grand_fanfare: { kind: "fanfare" },
+  // milestone aliases
+  milestone_25:  { kind: "levelup" },
+  milestone_50:  { kind: "levelup" },
+  milestone_75:  { kind: "levelup" },
+  milestone_100: { kind: "fanfare" },
+};
+
+function useRetroAudio() {
+  const ctxRef = useRef(null);
+  const masterRef = useRef(null);
+  const fileBufferRef = useRef({});           // name -> AudioBuffer (when real files exist)
+  const unlockedRef = useRef(false);
+  const [isMuted, setIsMuted] = useState(() => {
+    try { return localStorage.getItem(MUTE_KEY) === "1"; } catch { return false; }
+  });
+
+  // persist mute
+  useEffect(() => {
+    try { localStorage.setItem(MUTE_KEY, isMuted ? "1" : "0"); } catch {}
+    if (masterRef.current) {
+      masterRef.current.gain.value = isMuted ? 0 : 0.85;
+    }
+  }, [isMuted]);
+
+  // Lazy init on first user gesture (autoplay policy compliance)
+  const ensureCtx = useCallback(() => {
+    if (ctxRef.current) {
+      if (ctxRef.current.state === "suspended") ctxRef.current.resume();
+      return ctxRef.current;
+    }
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      const master = ctx.createGain();
+      master.gain.value = isMuted ? 0 : 0.85;
+      master.connect(ctx.destination);
+      ctxRef.current = ctx;
+      masterRef.current = master;
+      // Try to preload any real files in sounds/ — silently ignore 404s
+      Object.keys(SFX_RECIPES).forEach(async (name) => {
+        try {
+          const res = await fetch(`sounds/${name}.mp3`);
+          if (!res.ok) return;
+          const arr = await res.arrayBuffer();
+          const buf = await ctx.decodeAudioData(arr);
+          fileBufferRef.current[name] = buf;
+        } catch {}
+      });
+      return ctx;
+    } catch {
+      return null;
+    }
+  }, [isMuted]);
+
+  // Unlock on first interaction
+  useEffect(() => {
+    const unlock = () => {
+      if (unlockedRef.current) return;
+      unlockedRef.current = true;
+      ensureCtx();
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [ensureCtx]);
+
+  /* ---- Synthesis primitives ---- */
+  const playFile = useCallback((name) => {
+    const ctx = ctxRef.current;
+    const buf = fileBufferRef.current[name];
+    if (!ctx || !buf) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(masterRef.current);
+    src.start();
+    return true;
+  }, []);
+
+  const playBlip = useCallback((ctx, t0, { freq = 440, dur = 0.08, type = "square", gain = 0.1, sweep = 0 }) => {
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (sweep) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq + sweep), t0 + dur);
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(gain, t0 + 0.005);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(env).connect(masterRef.current);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.02);
+  }, []);
+
+  const playNoise = useCallback((ctx, t0, { dur = 0.15, gain = 0.12, hp = 800 }) => {
+    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "highpass";
+    filter.frequency.value = hp;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(gain, t0 + 0.005);
+    env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    src.connect(filter).connect(env).connect(masterRef.current);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+  }, []);
+
+  /* ---- Composite recipes (each spawns its own nodes — overlap-safe) ---- */
+  const playRecipe = useCallback((name) => {
+    const recipe = SFX_RECIPES[name];
+    if (!recipe) return;
+    const ctx = ensureCtx();
+    if (!ctx || isMuted) return;
+    if (playFile(name)) return; // real file takes precedence
+
+    const t = ctx.currentTime;
+    switch (recipe.kind) {
+      case "blip":
+        playBlip(ctx, t, recipe);
+        break;
+
+      case "kaching": {
+        // classic coin pickup: short high blip + higher shimmer
+        playBlip(ctx, t,        { freq: 988,  dur: 0.06, type: "square", gain: 0.12 });
+        playBlip(ctx, t + 0.06, { freq: 1318, dur: 0.16, type: "square", gain: 0.14 });
+        break;
+      }
+      case "laser": {
+        // descending pew
+        playBlip(ctx, t, { freq: 1600, dur: 0.16, type: "square", gain: 0.12, sweep: -1300 });
+        playNoise(ctx, t + 0.05, { dur: 0.08, gain: 0.05, hp: 2000 });
+        break;
+      }
+      case "powerup": {
+        // warm bouncy power-up: 4-step arpeggio up
+        const notes = [392, 523, 659, 784]; // G C E G
+        notes.forEach((f, i) => {
+          playBlip(ctx, t + i * 0.06, { freq: f, dur: 0.09, type: "triangle", gain: 0.12 });
+        });
+        break;
+      }
+      case "slash": {
+        // sharp blade: noise burst + quick downward zap
+        playNoise(ctx, t, { dur: 0.14, gain: 0.18, hp: 1500 });
+        playBlip(ctx, t, { freq: 1200, dur: 0.12, type: "sawtooth", gain: 0.08, sweep: -1000 });
+        break;
+      }
+      case "chime": {
+        // mystic chime: 3 sparkling triangle notes
+        const notes = [880, 1175, 1568]; // A6, D7, G7
+        notes.forEach((f, i) => {
+          playBlip(ctx, t + i * 0.08, { freq: f, dur: 0.32, type: "triangle", gain: 0.10 });
+        });
+        break;
+      }
+      case "mech": {
+        // heavy thud: low square + noise rumble
+        playBlip(ctx, t, { freq: 110, dur: 0.18, type: "square", gain: 0.18, sweep: -50 });
+        playNoise(ctx, t, { dur: 0.22, gain: 0.10, hp: 200 });
+        playBlip(ctx, t + 0.10, { freq: 80, dur: 0.16, type: "sawtooth", gain: 0.12, sweep: -30 });
+        break;
+      }
+      case "levelup": {
+        // victorious jingle: ascending major arpeggio
+        const notes = [523, 659, 784, 1047]; // C E G C
+        notes.forEach((f, i) => {
+          playBlip(ctx, t + i * 0.08, { freq: f, dur: 0.16, type: "square", gain: 0.12 });
+        });
+        playBlip(ctx, t + 0.40, { freq: 1568, dur: 0.30, type: "triangle", gain: 0.14 });
+        break;
+      }
+      case "fanfare": {
+        // long epic fanfare
+        const phrase = [
+          [523, 0.00, 0.16], [659, 0.16, 0.16], [784, 0.32, 0.16], [1047, 0.48, 0.36],
+          [988, 0.90, 0.12], [1047, 1.05, 0.40],
+          [1175, 1.55, 0.20], [1319, 1.80, 0.60],
+        ];
+        phrase.forEach(([f, d, dur]) => {
+          playBlip(ctx, t + d,        { freq: f,     dur, type: "square",   gain: 0.10 });
+          playBlip(ctx, t + d + 0.005,{ freq: f * 2, dur, type: "triangle", gain: 0.05 });
+        });
+        // closing cymbal
+        playNoise(ctx, t + 2.40, { dur: 0.40, gain: 0.10, hp: 2500 });
+        break;
+      }
+    }
+  }, [ensureCtx, isMuted, playFile, playBlip, playNoise]);
+
+  return {
+    play: playRecipe,
+    isMuted,
+    toggleMute: () => setIsMuted(m => !m),
+  };
+}
+
+/* ---------- Mute toggle button ---------- */
+function MuteToggle({ isMuted, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={isMuted ? "Unmute audio" : "Mute audio"}
+      style={{
+        position: "absolute",
+        top: 0, left: 0,
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px",
+        background: isMuted ? "#3a1a1a" : "#0a1626",
+        color: "#f3ead2",
+        boxShadow: "0 0 0 2px #000, inset 2px 2px 0 0 " + (isMuted ? "#8a3a3a" : "#2c537a") + ", inset -2px -2px 0 0 #061425",
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: 9,
+        letterSpacing: 1,
+        cursor: "pointer",
+      }}
+    >
+      <span style={{
+        display: "inline-block",
+        width: 14, height: 14,
+        position: "relative",
+        background: isMuted ? "#c84a3a" : "#f5c344",
+        boxShadow: "inset -3px -2px 0 0 " + (isMuted ? "#7a2010" : "#a06c1f"),
+      }}>
+        {isMuted && (
+          <span style={{
+            position: "absolute", left: -2, right: -2, top: 5, height: 3,
+            background: "#f3ead2", transform: "rotate(-45deg)",
+            boxShadow: "0 0 0 1px #000",
+          }}/>
+        )}
+      </span>
+      {isMuted ? "MUTED" : "SOUND"}
+    </button>
+  );
+}
+
+/* ---------- Audio (placeholders — drop .mp3 files into ./sfx/ later) ---------- */
+const sfx = new Audio();
+function playSoundLegacy(name) {
+  // legacy no-op; replaced by useRetroAudio hook in <App/>
+}
+
+/* ---------- Crew (ORIGINAL pirate archetypes — not branded characters) ----------
+   Each crew member gets a 12x12 CSS-pixel portrait built from a sprite grid.
+   Palette keys: . (skip) plus single chars mapped per-sprite. */
+const CREW = {
+  5: {
+    name: "NAVIGATOR REN", line: "chart course — gimme the coin!", anim: "pop",   color: "#ff9a4a",
+    sound: "coin_kaching",
+    palette: { o: "#ff9a4a", h: "#b04a1a", s: "#f3d0a8", e: "#1a1a1a", w: "#ffffff", c: "#f5c344" },
+    sprite: [
+      "....oooo....",
+      "...oooooo...",
+      "..ohhhhhho..",
+      "..hsssssh...",
+      "..seswsesw..",
+      "..sseessss..",
+      "...ssssss...",
+      "..ccccccc...",
+      ".cscccccs...",
+      ".sccccccs...",
+      "..sssssss...",
+      "...s....s...",
+    ],
+  },
+  10: {
+    name: "SHARPSHOT KAI", line: "target locked — fire!", anim: "bounce", color: "#c84a3a",
+    sound: "laser_shoot",
+    palette: { g: "#7a5a2a", s: "#f3d0a8", e: "#1a1a1a", r: "#c84a3a", b: "#3a3a3a", w: "#ffffff" },
+    sprite: [
+      "....gggg....",
+      "...gggggg...",
+      "..gssssssg..",
+      "..sebesebs..",
+      "..ssewwess..",
+      "..ssssesss..",
+      "...ssssss...",
+      "..rrrrrrr...",
+      ".rsrrrrrs...",
+      ".srrrrrrs...",
+      "..rrrrrrr...",
+      "...r....r...",
+    ],
+  },
+  20: {
+    name: "COOK MARLO", line: "a feast worth its weight!", anim: "pop", color: "#f1c27d",
+    sound: "powerup_short",
+    palette: { w: "#ffffff", s: "#f1c27d", e: "#1a1a1a", y: "#f5c344", b: "#3a3a3a" },
+    sprite: [
+      "...wwwwww...",
+      "..wwwwwwww..",
+      ".wwwwwwwwww.",
+      "..ssssssss..",
+      "..sebsesbs..",
+      "..ssewwess..",
+      "...ssssss...",
+      "..byyyyyyb..",
+      ".bsyyyyybs..",
+      ".syyyyyyys..",
+      "..yyyyyyy...",
+      "...y....y...",
+    ],
+  },
+  50: {
+    name: "SWORD CAPTAIN VEX", line: "three blades, one cut!", anim: "slash", color: "#b4d2ef",
+    sound: "sword_slash",
+    palette: { g: "#3a6b3a", s: "#f3d0a8", e: "#1a1a1a", h: "#2a4868", b: "#0a1626", w: "#ffffff" },
+    sprite: [
+      "....gggg....",
+      "...gghhgg...",
+      "..gsssssg...",
+      "..sebesebs..",
+      "..ssewwess..",
+      "..sssseess..",
+      "...ssssss...",
+      "..hhhhhhh...",
+      ".bhhhhhhhb..",
+      ".bhhhhhhhb..",
+      "..hhhhhhh...",
+      "...h....h...",
+    ],
+  },
+  100: {
+    name: "SCHOLAR IRIS", line: "every page, a fortune!", anim: "pop", color: "#d9a3e0",
+    sound: "mystic_chime",
+    palette: { k: "#3a1a3a", s: "#f3d0a8", e: "#1a1a1a", p: "#d9a3e0", b: "#7a3a8a", w: "#ffffff" },
+    sprite: [
+      "...kkkkkk...",
+      "..kkkkkkkk..",
+      ".kkssssssk..",
+      "..sebesebs..",
+      "..ssewwess..",
+      "..sssseess..",
+      "...ssssss...",
+      "..pppppppp..",
+      ".bpppppppb..",
+      ".bpppppppb..",
+      "..ppppppp...",
+      "...p....p...",
+    ],
+  },
+  200: {
+    name: "ENGINEER ROK", line: "FULL POWER SAVING!", anim: "shake", color: "#f5c344",
+    sound: "heavy_mech",
+    palette: { b: "#4a8ed9", g: "#9aa0a8", e: "#1a1a1a", y: "#f5c344", r: "#c84a3a", w: "#ffffff" },
+    sprite: [
+      "....bbbb....",
+      "...bbbbbb...",
+      "..bggggggb..",
+      "..gegegege..",
+      "..gewwwweg..",
+      "..ggggggg...",
+      "...gggggg...",
+      "..yyyyyyy...",
+      ".rrryyyrrr..",
+      ".rrryyyrrr..",
+      "..yyyyyyy...",
+      "...y....y...",
+    ],
+  },
+};
+
+const MILESTONES = [
+  { pct: 25, label: "REEF GATE",     emoji: "🏝️", flavor: "first landfall" },
+  { pct: 50, label: "TIDAL STORM",   emoji: "⛈️", flavor: "weathered the gale" },
+  { pct: 75, label: "KRAKEN'S MAW",  emoji: "🐙", flavor: "survived the depths" },
+  { pct: 100,label: "TREASURE ISLE", emoji: "💎", flavor: "X marks the spot!" },
+];
+
+const STORAGE_KEY = "treasure-hunter-savings-v1";
+const SHARE_PARAM = "save";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+/* ---------- Unicode-safe Base64 encode/decode pipeline ----------
+   btoa() is byte-oriented and chokes on any code point > 0xFF — so emoji,
+   smart quotes, accents, etc. would all throw. We bridge through UTF-8
+   bytes (TextEncoder/Decoder) so the entire state survives the round-trip.
+
+   Encode:  state -> JSON.stringify -> UTF-8 bytes -> base64 -> URI-encode
+   Decode:  URI-decode -> base64 -> UTF-8 bytes -> JSON.parse
+*/
+function bytesToBase64(bytes) {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+function encodeStateToParam(state) {
+  const json = JSON.stringify(state);
+  const bytes = new TextEncoder().encode(json);
+  const b64 = bytesToBase64(bytes);
+  return encodeURIComponent(b64);
+}
+function decodeStateFromParam(param) {
+  try {
+    const b64 = decodeURIComponent(param);
+    const bytes = base64ToBytes(b64);
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    // Light shape validation — refuse anything that doesn't look like our state.
+    if (!parsed || typeof parsed !== "object") return null;
+    if (!Array.isArray(parsed.checked)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+function loadStateFromUrlOrStorage() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get(SHARE_PARAM);
+    if (shared) {
+      const decoded = decodeStateFromParam(shared);
+      if (decoded) {
+        // Mirror into localStorage as a backup so a refresh doesn't lose it.
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(decoded)); } catch {}
+        // Strip ?save= from the address bar so the URL looks clean.
+        try {
+          params.delete(SHARE_PARAM);
+          const qs = params.toString();
+          const clean = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+          window.history.replaceState({}, "", clean);
+        } catch {}
+        return decoded;
+      }
+    }
+  } catch {}
+  return loadState();
+}
+
+/* ---------- Sea Scene sprites (big background ship + island) ---------- */
+const BIG_SHIP_SPRITE = [
+  "...............W...............",
+  "..............WWW..............",
+  "..............WfW..............",
+  "...............W...............",
+  "............ssssss.............",
+  "...........ssssssss...W........",
+  "..........sssssssss..WWW.......",
+  "..........sssssssss..WWW.......",
+  "..........sssssssss...W........",
+  "..........sssssssss...W........",
+  "...............W......W........",
+  "...............W......W........",
+  "...............W......W........",
+  ".hhhhhhhhhhhhhhhhhhhhhhhhh.....",
+  "hhhhhwhhwhhwhhwhhwhhhhhhhhh....",
+  "hhhwwwwwwwwwwwwwwwwwwwwwhhh....",
+  ".hhhhhhhhhhhhhhhhhhhhhhhh......",
+  "..bhhhhhhhhhhhhhhhhhhhhb.......",
+  "...bbhhhhhhhhhhhhhhhhbb........",
+  ".....bbbbbbbbbbbbbbbb..........",
+];
+const BIG_SHIP_PALETTE = {
+  W: "#f3ead2", f: "#c84a3a",
+  s: "#e6d8a8", h: "#7a4a1a", w: "#3a2410", b: "#3a2410",
+};
+
+const ISLAND_SPRITE = [
+  "...............T...............",
+  "..............TTT..............",
+  ".............TTTTT.............",
+  "............TTTTTTT............",
+  ".............TTTTT.............",
+  "..............tTt..............",
+  "..............tTt..............",
+  "...........GGGtTtGGG...........",
+  "..........GGGGGGGGGGG..........",
+  ".........GGGGggggGGGGG.........",
+  "........GGgggggggggGGG.........",
+  ".......GGggggggggggggGG........",
+  "......GGggggggggggggggGG.......",
+  ".....GggggggggggggggggggG......",
+  "....SSSSSSSSSSSSSSSSSSSSSS.....",
+  "...SSSSSSSSSSSSSSSSSSSSSSSS....",
+  "..SSSSSSSSSSSSSSSSSSSSSSSSSS...",
+];
+const ISLAND_PALETTE = {
+  T: "#4a8a3a", t: "#5a3a1a",
+  G: "#3a6b2a", g: "#4a8a3a",
+  S: "#e6d8a8",
+};
+
+function SeaScene({ mode = "night" }) {
+  return (
+    <div className={`sea-scene ${mode === "day" ? "day" : ""}`} aria-hidden="true">
+      <div className="sea-sky"/>
+      <div className="sea-stars"/>
+      <div className="sea-moon"/>
+      <div className="seagull g1"/>
+      <div className="seagull g2"/>
+      <div className="seagull g3"/>
+      <div className="sea-horizon"/>
+
+      {/* island sits at the destination */}
+      <div className="island-anchor">
+        <div className="island-bob" style={{ filter: "drop-shadow(3px 3px 0 rgba(0,0,0,.6))" }}>
+          <PixelSprite sprite={ISLAND_SPRITE} palette={ISLAND_PALETTE} scale={5}/>
+        </div>
+      </div>
+
+      <div className="wave-band wave-far"/>
+      <div className="wave-band wave-mid"/>
+
+      {/* the ship sails right toward the island */}
+      <div className="ship-anchor">
+        <div className="ship-bob" style={{ filter: "drop-shadow(3px 3px 0 rgba(0,0,0,.55))" }}>
+          <PixelSprite sprite={BIG_SHIP_SPRITE} palette={BIG_SHIP_PALETTE} scale={4}/>
+        </div>
+      </div>
+
+      <div className="wave-band wave-near"/>
+      <div className="wave-band wave-foam"/>
+      <div className="sea-deep"/>
+      <div className="sea-dim"/>
+    </div>
+  );
+}
+
+/* ---------- Generic pixel-sprite renderer (box-shadow grid, integer pixels) ---------- */
+function PixelSprite({ sprite, palette, scale = 4, className = "" }) {
+  const P = scale;
+  const w = Math.max(...sprite.map(r => r.length));
+  const h = sprite.length;
+  const shadows = [];
+  sprite.forEach((row, y) => {
+    [...row].forEach((c, x) => {
+      if (palette[c]) shadows.push(`${x*P}px ${y*P}px 0 0 ${palette[c]}`);
+    });
+  });
+  return (
+    <div className={className} style={{
+      position: "relative",
+      width: w * P, height: h * P,
+    }}>
+      <div style={{
+        position: "absolute", left: 0, top: 0,
+        width: P, height: P,
+        boxShadow: shadows.join(","),
+      }}/>
+    </div>
+  );
+}
+
+/* ---------- Skull & Cutlasses emblem (ORIGINAL — not the Jolly Roger) ---------- */
+const EMBLEM_SPRITE = [
+  "...sssssss...",
+  "..sswwwwwss..",
+  ".swwwwwwwws.",
+  ".swweswessws",
+  ".swwwwwwwws.",
+  ".swwesesewws",
+  "..swwwwwwws..",
+  "...sssssss...",
+  "r..s.s.s..r..",
+  "rr.......rr..",
+  ".rrrrrrrrr...",
+  "..rr...rr....",
+];
+const EMBLEM_PALETTE = { s: "#0a1626", w: "#f3ead2", e: "#0a1626", r: "#c79152" };
+
+function Emblem({ scale = 6 }) {
+  return (
+    <div style={{ filter: "drop-shadow(2px 2px 0 #000)" }}>
+      <PixelSprite sprite={EMBLEM_SPRITE} palette={EMBLEM_PALETTE} scale={scale} />
+    </div>
+  );
+}
+
+/* ---------- Pixel Ship sprite (built from CSS box-shadows) ---------- */
+function PixelShip() {
+  // 11x9 sprite via box-shadow
+  // px size
+  const P = 4;
+  // simple pirate ship sprite
+  const sprite = [
+    "...........s....",
+    "...........s....",
+    "...........s....",
+    "..........bbb...",
+    "..........bbb...",
+    "h..........s....",
+    "hh.........s....",
+    "hhhhhhhhhhhhhh..",
+    ".hhhhhhhhhhhh...",
+  ];
+  const colors = { h: "#a86a2a", s: "#f3ead2", b: "#c84a3a" };
+  const shadows = [];
+  sprite.forEach((row, y) => {
+    [...row].forEach((c, x) => {
+      if (colors[c]) shadows.push(`${x*P}px ${y*P}px 0 0 ${colors[c]}`);
+    });
+  });
+  return (
+    <div className="bob" style={{
+      width: P, height: P,
+      boxShadow: shadows.join(",")
+    }} />
+  );
+}
+
+/* ---------- Header form ---------- */
+function HeaderForm({ data, onChange, total, goal }) {
+  return (
+    <div className="pixel-panel p-4 md:p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-5">
+        <Field label="NAME" placeholder="captain ___" value={data.name}
+          onChange={v => onChange({ ...data, name: v })} />
+        <Field label="SAVING FOR" placeholder="pirate ship deluxe"
+          value={data.savingFor} onChange={v => onChange({ ...data, savingFor: v })} />
+        <Field label="START DATE" placeholder="01 / 06 / 2026" value={data.startDate}
+          onChange={v => onChange({ ...data, startDate: v })} />
+        <Field label="END DATE" placeholder="31 / 12 / 2026" value={data.endDate}
+          onChange={v => onChange({ ...data, endDate: v })} />
+      </div>
+      <div className="mt-4 pt-3 border-t-4 border-dashed" style={{borderColor:"#2c537a"}}>
+        <div className="flex flex-wrap items-end gap-x-6 gap-y-2 justify-between">
+          <div>
+            <div className="pixel-h text-[10px] mb-1" style={{color:"#b4d2ef"}}>GOAL AMOUNT</div>
+            <div className="pixel-h text-2xl md:text-3xl" style={{color:"var(--gold)"}}>
+              {goal.toLocaleString()} <span style={{color:"var(--bone)"}}>GHC</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="pixel-h text-[10px] mb-1" style={{color:"#b4d2ef"}}>SAVED SO FAR</div>
+            <div className="pixel-h text-2xl md:text-3xl" style={{color:"var(--gold-hi)"}}>
+              {total.toLocaleString()} <span style={{color:"var(--bone)"}}>GHC</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function Field({ label, placeholder, value, onChange }) {
+  return (
+    <label className="block">
+      <div className="pixel-h text-[10px] mb-1" style={{color:"#b4d2ef"}}>&gt; {label}</div>
+      <div style={{
+        boxShadow: "inset 0 0 0 2px #2c537a, 0 0 0 2px #000",
+        background: "#0a1626",
+        padding: "10px 12px",
+      }}>
+        <input className="pixel-input text-xl" value={value} onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}/>
+      </div>
+    </label>
+  );
+}
+
+/* ---------- Cell ---------- */
+function Cell({ denom, checked, onClick, idx }) {
+  return (
+    <button
+      onClick={() => onClick(idx, denom)}
+      className={`pixel-cell pixel-h flex items-center justify-center ${checked ? "cell-filled" : "cell-empty"}`}
+      style={{
+        aspectRatio: "1 / 1",
+        fontSize: denom >= 100 ? "10px" : "11px",
+        minHeight: 0,
+      }}
+      aria-label={`${checked ? "Unmark" : "Mark"} ${denom} GHC cell`}
+    >
+      {denom}
+    </button>
+  );
+}
+
+/* ---------- Popup overlay ---------- */
+function CrewPopup({ popup }) {
+  if (!popup) return null;
+  const crew = CREW[popup.denom];
+  const animClass = popup.anim;
+  return (
+    <div style={{
+      position: "fixed",
+      left: popup.x, top: popup.y,
+      transform: "translate(-50%,-50%)",
+      pointerEvents: "none",
+      zIndex: 80,
+    }}>
+      <div style={{
+        animation: animClass === "slash"
+          ? "slash 700ms steps(8) forwards"
+          : animClass === "shake"
+          ? "pop 900ms steps(8) forwards"
+          : animClass === "bounce"
+          ? "pop 700ms steps(6) forwards"
+          : "pop 700ms steps(6) forwards",
+        background: "#0a1626",
+        boxShadow: "0 0 0 3px #000, 0 0 0 6px #f3ead2, 0 0 0 9px #000",
+        padding: "12px 16px",
+        textAlign: "center",
+        minWidth: 160,
+      }}>
+        <div style={{ display: "flex", justifyContent: "center", filter: "drop-shadow(2px 2px 0 #000)" }}>
+          <PixelSprite sprite={crew.sprite} palette={crew.palette} scale={4}/>
+        </div>
+        <div className="pixel-h text-[10px] mt-3" style={{ color: crew.color }}>{crew.name}</div>
+        <div className="pixel-h text-[10px] mt-1" style={{ color: "var(--gold-hi)" }}>+{popup.denom} GHC</div>
+        <div className="text-xl mt-1" style={{ color: "var(--bone)" }}>“{crew.line}”</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Floating +X chip ---------- */
+function FloatChip({ chip }) {
+  if (!chip) return null;
+  return (
+    <div style={{
+      position: "fixed",
+      left: chip.x, top: chip.y,
+      transform: "translate(-50%, 0)",
+      pointerEvents: "none",
+      zIndex: 90,
+      animation: "float-up 800ms steps(8) forwards",
+    }}>
+      <div className="pixel-h text-xs px-2 py-1" style={{
+        background: chip.sign === "+" ? "var(--gold)" : "#c84a3a",
+        color: chip.sign === "+" ? "#2a1c00" : "var(--bone)",
+        boxShadow: "0 0 0 2px #000",
+      }}>
+        {chip.sign}{chip.denom}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Confetti ---------- */
+function Confetti({ active }) {
+  const pieces = useMemo(() => {
+    return Array.from({ length: 60 }, (_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 600,
+      size: 6 + Math.floor(Math.random()*8),
+      color: ["#f5c344","#c84a3a","#4fb3a9","#fff1a8","#b4d2ef","#d9a3e0"][i % 6],
+      duration: 1400 + Math.random()*1200,
+    }));
+  }, [active]);
+  if (!active) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 70, overflow: "hidden" }}>
+      {pieces.map((p, i) => (
+        <div key={i} style={{
+          position: "absolute",
+          left: `${p.left}%`,
+          top: 0,
+          width: p.size, height: p.size,
+          background: p.color,
+          boxShadow: "0 0 0 1px #000",
+          animation: `confetti-fall ${p.duration}ms steps(20) ${p.delay}ms forwards`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- Day / Night toggle ---------- */
+function DayNightToggle({ mode, onToggle }) {
+  const isDay = mode === "day";
+  return (
+    <button
+      onClick={onToggle}
+      aria-label={`Switch to ${isDay ? "night" : "day"} mode`}
+      style={{
+        position: "absolute",
+        top: 0, right: 0,
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px",
+        background: isDay ? "#b3dcef" : "#0a1626",
+        color: isDay ? "#0a1626" : "#f3ead2",
+        boxShadow: "0 0 0 2px #000, inset 2px 2px 0 0 " + (isDay ? "#fff" : "#2c537a") + ", inset -2px -2px 0 0 " + (isDay ? "#5fa3ce" : "#061425"),
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: 9,
+        letterSpacing: 1,
+        cursor: "pointer",
+      }}
+    >
+      {/* Pixel sun/moon icon */}
+      <span style={{
+        display: "inline-block",
+        width: 14, height: 14,
+        background: isDay ? "#ffe25a" : "#f3ead2",
+        boxShadow: isDay
+          ? "0 0 0 2px #f5b820, 0 0 0 4px rgba(255,226,90,.4)"
+          : "inset -4px -3px 0 0 #c9b97a, 0 0 0 1px #2a4868",
+      }}/>
+      {isDay ? "DAY" : "NIGHT"}
+    </button>
+  );
+}
+
+/* ---------- Grand Finale (100% celebration) ---------- */
+const CAPTAIN_SPRITE = [
+  ".....rrrrrrr.....",
+  "....rrrrrrrrr....",
+  "...rryyyyyyyrr...",
+  "..rrrrrrrrrrrrr..",
+  "....ssssssss.....",
+  "...sssssssssss...",
+  "..sebssesebsss...",
+  "..ssewwwwwess....",
+  "...ssssGGsss.....",
+  "....ssssssss.....",
+  "...wwwwwwwww.....",
+  "..wwbbbbbbbww....",
+  ".wwbbBBBBBbbww...",
+  ".wbbbBBBBBbbbw...",
+  ".wbbbbBBBbbbbw...",
+  "..wwbbbbbbbww....",
+  "...wwwwwwww......",
+  "....cc...cc......",
+  "....cc...cc......",
+  "...bcc...bcc.....",
+];
+const CAPTAIN_PALETTE = {
+  r: "#c84a3a", y: "#f5c344",
+  s: "#f3d0a8", e: "#1a1a1a", w: "#ffffff", G: "#c84a3a",
+  b: "#0a1626", B: "#f3ead2", c: "#2a4868",
+};
+
+function GrandFinale({ active, goal, onDismiss }) {
+  if (!active) return null;
+  return (
+    <div
+      onClick={onDismiss}
+      style={{
+        position: "fixed", inset: 0, zIndex: 200,
+        background: "rgba(10,22,38,.92)",
+        cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexDirection: "column",
+      }}
+    >
+      {/* radial rays behind captain */}
+      <div style={{
+        position: "absolute", inset: 0, pointerEvents: "none",
+        background:
+          "conic-gradient(from 0deg at 50% 50%, rgba(245,195,68,.18) 0 6deg, transparent 6deg 18deg, rgba(245,195,68,.18) 18deg 24deg, transparent 24deg 36deg)",
+        animation: "rays 12s linear infinite",
+      }}/>
+      <div style={{
+        animation: "finale-zoom 700ms steps(8) forwards",
+        textAlign: "center",
+        position: "relative",
+      }}>
+        <div className="pixel-h flash-text" style={{
+          fontSize: "clamp(20px, 3.6vw, 44px)",
+          textShadow: "3px 3px 0 #000, 6px 6px 0 #a06c1f",
+          letterSpacing: 2,
+          marginBottom: 20,
+        }}>
+          TREASURE&nbsp;FOUND!
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "center", filter: "drop-shadow(4px 4px 0 #000)" }}>
+          <PixelSprite sprite={CAPTAIN_SPRITE} palette={CAPTAIN_PALETTE} scale={14}/>
+        </div>
+
+        <div className="pixel-h" style={{
+          marginTop: 24,
+          fontSize: "clamp(14px, 2.2vw, 26px)",
+          color: "var(--gold-hi)",
+          textShadow: "2px 2px 0 #000",
+        }}>
+          {goal.toLocaleString()}&nbsp;GHC&nbsp;SAVED!
+        </div>
+
+        <div className="pixel-h text-xs mt-6" style={{ color: "#b4d2ef" }}>
+          ★  click anywhere to dismiss  ★
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Milestone banner ---------- */
+function MilestoneBanner({ banner }) {
+  if (!banner) return null;
+  return (
+    <div style={{
+      position: "fixed",
+      top: "18%", left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: 95, pointerEvents: "none",
+      animation: "pop 1600ms steps(12) forwards",
+    }}>
+      <div style={{
+        background: "#0a1626",
+        boxShadow: "0 0 0 3px #000, 0 0 0 7px var(--gold), 0 0 0 10px #000",
+        padding: "16px 26px",
+        textAlign: "center",
+      }}>
+        <div className="pixel-h text-[10px]" style={{color:"#b4d2ef"}}>MILESTONE REACHED</div>
+        <div style={{ fontSize: 56, lineHeight: 1, marginTop: 6, filter:"drop-shadow(2px 2px 0 #000)" }}>{banner.emoji}</div>
+        <div className="pixel-h text-lg mt-3" style={{color:"var(--gold-hi)"}}>{banner.label}</div>
+        <div className="pixel-h text-[10px] mt-1" style={{color:"var(--bone)"}}>{banner.flavor || `${banner.pct}% — onward, captain!`}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Floating pixel toast ---------- */
+function PixelToast({ message }) {
+  if (!message) return null;
+  return (
+    <div style={{
+      position: "fixed",
+      left: "50%",
+      bottom: "7%",
+      transform: "translateX(-50%)",
+      zIndex: 210,
+      pointerEvents: "none",
+      animation: "pop 600ms steps(6) forwards",
+    }}>
+      <div className="pixel-h" style={{
+        background: "#0a1626",
+        color: "var(--gold-hi)",
+        padding: "14px 22px",
+        fontSize: 12,
+        letterSpacing: 2,
+        boxShadow: "0 0 0 3px #000, 0 0 0 6px var(--gold), 0 0 0 9px #000",
+        textShadow: "2px 2px 0 #000",
+      }}>
+        {message}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Main App ---------- */
+function App() {
+  const initial = loadStateFromUrlOrStorage();
+  const audio = useRetroAudio();
+  const playSound = audio.play;
+  const [seed] = useState(initial?.seed ?? 42);
+  const grid = useMemo(() => buildGrid(seed), [seed]);
+  const goal = useMemo(() => grid.reduce((a,b)=>a+b,0), [grid]);
+
+  const [checked, setChecked] = useState(initial?.checked ?? Array(grid.length).fill(false));
+  const [info, setInfo] = useState(initial?.info ?? {
+    name: "", savingFor: "", startDate: "", endDate: "",
+  });
+  const [reachedMilestones, setReachedMilestones] = useState(initial?.reachedMilestones ?? []);
+  const [mode, setMode] = useState(initial?.mode ?? "night");
+
+  const [popup, setPopup] = useState(null);
+  const [chip, setChip] = useState(null);
+  const [banner, setBanner] = useState(null);
+  const [confettiOn, setConfettiOn] = useState(false);
+  const [grandFinale, setGrandFinale] = useState(false);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef();
+
+  const popupTimer = useRef();
+  const chipTimer = useRef();
+  const bannerTimer = useRef();
+
+  // Persist
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      seed, checked, info, reachedMilestones, mode,
+    }));
+  }, [seed, checked, info, reachedMilestones, mode]);
+
+  const total = useMemo(() =>
+    checked.reduce((sum, on, i) => sum + (on ? grid[i] : 0), 0),
+    [checked, grid]);
+  const pct = Math.min(100, (total / goal) * 100);
+
+  // Milestone detection
+  useEffect(() => {
+    const newly = MILESTONES.find(m => pct >= m.pct && !reachedMilestones.includes(m.pct));
+    if (newly) {
+      setReachedMilestones(prev => [...prev, newly.pct]);
+      setBanner(newly);
+      setConfettiOn(true);
+      playSound(`milestone_${newly.pct}`);
+      clearTimeout(bannerTimer.current);
+      bannerTimer.current = setTimeout(() => { setBanner(null); setConfettiOn(false); }, 1700);
+      if (newly.pct >= 100) {
+        // small delay so the milestone banner gets its moment first
+        setTimeout(() => {
+          playSound("grand_finale");
+          setGrandFinale(true);
+          setConfettiOn(true);
+        }, 1500);
+      }
+    }
+  }, [pct]);
+
+  const handleCellClick = useCallback((idx, denom) => {
+    setChecked(prev => {
+      const next = [...prev];
+      next[idx] = !prev[idx];
+      return next;
+    });
+    // Get pointer pos via event
+  }, []);
+
+  // We need pointer pos: attach a click handler with the event
+  const onCellWithEvent = (idx, denom, e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const wasChecked = checked[idx];
+    setChecked(prev => {
+      const next = [...prev];
+      next[idx] = !prev[idx];
+      return next;
+    });
+    if (!wasChecked) {
+      // Audio hook — placeholder until sfx files are dropped in ./sfx/
+      playSound(CREW[denom].sound);
+      // pop crew + chip
+      const x = r.left + r.width/2;
+      const y = r.top + r.height/2;
+      setPopup({ denom, x, y, anim: CREW[denom].anim, key: Date.now() });
+      clearTimeout(popupTimer.current);
+      popupTimer.current = setTimeout(() => setPopup(null), 900);
+      setChip({ denom, x, y: r.top, sign: "+", key: Date.now() });
+      clearTimeout(chipTimer.current);
+      chipTimer.current = setTimeout(() => setChip(null), 800);
+    } else {
+      playSound("uncheck");
+      const x = r.left + r.width/2;
+      setChip({ denom, x, y: r.top, sign: "-", key: Date.now() });
+      clearTimeout(chipTimer.current);
+      chipTimer.current = setTimeout(() => setChip(null), 800);
+    }
+  };
+
+  const resetAll = () => {
+    audio.play("ui_click");
+    if (confirm("Scuttle the ship and start over?")) {
+      setChecked(Array(grid.length).fill(false));
+      setReachedMilestones([]);
+    }
+  };
+
+  const flashToast = useCallback((message) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2000);
+  }, []);
+
+  const shareVoyage = useCallback(async () => {
+    audio.play("ui_click");
+    const state = { seed, checked, info, reachedMilestones, mode };
+    const encoded = encodeStateToParam(state);
+    const shareUrl = window.location.origin + window.location.pathname + "?" + SHARE_PARAM + "=" + encoded;
+    const captain = (info.name && info.name.trim()) || "a buccaneer";
+    const sharePayload = {
+      title: `Treasure Hunter \u2014 ${captain}'s Voyage`,
+      text: `I've saved GHC ${total.toLocaleString()} of my GHC ${goal.toLocaleString()} goal! Join my crew \uD83C\uDFF4\u200D\u2620\uFE0F`,
+      url: shareUrl,
+    };
+
+    // Primary: Web Share API (mobile + some desktop browsers)
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+      try {
+        await navigator.share(sharePayload);
+        return;
+      } catch (err) {
+        // AbortError = user dismissed the sheet; stay silent.
+        if (err && err.name === "AbortError") return;
+        // Anything else falls through to clipboard.
+      }
+    }
+
+    // Fallback: clipboard
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        // Last-resort legacy fallback for very old browsers.
+        const ta = document.createElement("textarea");
+        ta.value = shareUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      flashToast("LINK COPIED!");
+    } catch {
+      flashToast("COPY FAILED \u2014 TRY AGAIN");
+    }
+  }, [audio, seed, checked, info, reachedMilestones, mode, total, goal, flashToast]);
+  const fillAll = () => {
+    audio.play("ui_click");
+    setChecked(Array(grid.length).fill(true));
+  };
+
+  return (
+    <div className="min-h-screen w-full overflow-x-hidden px-2 sm:px-3 md:px-6 lg:px-10 py-6 md:py-10" style={{ position: "relative", zIndex: 1 }}>
+      <SeaScene mode={mode}/>
+      <div className="mx-auto w-full max-w-[1100px]" style={{ position: "relative", zIndex: 1 }}>
+
+        {/* TITLE */}
+        <div className="text-center mb-4 md:mb-6 relative">
+          <MuteToggle isMuted={audio.isMuted} onToggle={audio.toggleMute}/>
+          <DayNightToggle mode={mode} onToggle={() => setMode(m => m === "day" ? "night" : "day")}/>
+          <div className="flex justify-center mb-3">
+            <Emblem scale={6}/>
+          </div>
+          <h1 className="pixel-h mt-2 leading-none"
+            style={{
+              fontSize: "clamp(28px, 5vw, 56px)",
+              color: "var(--gold)",
+              textShadow: "3px 3px 0 #000, 6px 6px 0 #c98f1c"
+            }}>
+            TREASURE&nbsp;HUNTER
+          </h1>
+          <div className="pixel-h text-[10px] md:text-xs mt-3" style={{color:"var(--bone)"}}>
+            ── a savings tracker for buccaneers ──
+          </div>
+        </div>
+
+        {/* HEADER FORM */}
+        <HeaderForm data={info} onChange={setInfo} total={total} goal={goal}/>
+
+        {/* CREW LEGEND */}
+        <div className="mt-6 pixel-panel p-3 md:p-4">
+          <div className="pixel-h text-[10px] mb-3" style={{color:"#b4d2ef"}}>&gt; YOUR CREW</div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 md:gap-3">
+            {Object.entries(CREW).map(([d, c]) => (
+              <div key={d} className="flex items-center gap-3" style={{
+                background: "#0a1626",
+                boxShadow: "inset 0 0 0 2px #2c537a, 0 0 0 2px #000",
+                padding: "10px 12px",
+              }}>
+                <PixelSprite sprite={c.sprite} palette={c.palette} scale={3}/>
+                <div className="min-w-0">
+                  <div className="pixel-h text-[8px] truncate" style={{color:c.color}}>{c.name}</div>
+                  <div className="pixel-h text-[8px] mt-1" style={{color:"var(--gold-hi)"}}>{d} GHC</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* GRID */}
+        <div className="mt-6 pixel-panel p-2 sm:p-3 md:p-5">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <div className="pixel-h text-[10px]" style={{color:"#b4d2ef"}}>&gt; THE TREASURE MAP</div>
+            <div className="flex gap-2">
+              <button className="pixel-btn" onClick={fillAll} onPointerEnter={() => audio.play("ui_hover")}>FILL ALL</button>
+              <button className="pixel-btn danger" onClick={resetAll} onPointerEnter={() => audio.play("ui_hover")}>RESET</button>
+            </div>
+          </div>
+
+          {/* 13 columns fit the parent — no horizontal scroll, no overflow. */}
+          <div
+            className="grid gap-[2px] md:gap-[5px]"
+            style={{
+              gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
+              background: "#0a1626",
+              padding: "4px",
+              boxShadow: "inset 0 0 0 2px #2c537a, 0 0 0 2px #000",
+            }}
+          >
+            {grid.map((d, i) => (
+              <button
+                key={i}
+                onClick={(e) => onCellWithEvent(i, d, e)}
+                onPointerEnter={() => !checked[i] && audio.play("ui_hover")}
+                className={`pixel-cell pixel-h flex items-center justify-center leading-none ${
+                  d >= 100
+                    ? "text-[6px] sm:text-[8px] md:text-[10px]"
+                    : "text-[8px] sm:text-[10px] md:text-xs"
+                } ${checked[i] ? "cell-filled" : `cell-empty${d === 100 ? " tier-100" : d === 200 ? " tier-200" : ""}`}`}
+                style={{
+                  aspectRatio: "1 / 1",
+                  padding: 0,
+                  minWidth: 0,
+                  minHeight: 0,
+                  lineHeight: 1,
+                  letterSpacing: d >= 100 ? 0 : undefined,
+                }}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mt-3">
+            <div className="pixel-h text-[8px]" style={{color:"#6f93b8"}}>
+              {checked.filter(Boolean).length} / {grid.length} cells filled
+            </div>
+            <div className="pixel-h text-[8px]" style={{color:"#6f93b8"}}>
+              seed {seed} · {COLS} cols
+            </div>
+          </div>
+        </div>
+
+        {/* PROGRESS */}
+        <div className="mt-6 pixel-panel p-4 md:p-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="pixel-h text-[10px]" style={{color:"#b4d2ef"}}>&gt; VOYAGE PROGRESS</div>
+            <div className="pixel-h text-[10px]" style={{color:"var(--gold)"}}>
+              {pct.toFixed(1)}%
+            </div>
+          </div>
+
+          <div style={{ position: "relative", paddingTop: 24, paddingBottom: 4 }}>
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${pct}%` }} />
+              {/* Milestones */}
+              {[25,50,75].map(m => (
+                <React.Fragment key={m}>
+                  <div className="milestone-marker" style={{ left: `${m}%` }} />
+                  <div className="milestone-label" style={{ left: `${m}%` }}>{m}%</div>
+                </React.Fragment>
+              ))}
+              {/* Ship */}
+              <div className="ship" style={{ left: `calc(${pct}% )` }}>
+                <PixelShip />
+              </div>
+              {/* Treasure end marker */}
+              <div style={{
+                position: "absolute", right: -2, top: 0, bottom: 0, width: 12,
+                background: "var(--rust)",
+                boxShadow: "inset 2px 0 0 0 #ff8a7a, inset -2px 0 0 0 #6e1d12",
+              }}/>
+            </div>
+            {/* X marks the spot */}
+            <div className="pixel-h text-xs mt-2 flex justify-between" style={{color:"#b4d2ef"}}>
+              <span>⚓ START</span>
+              <span style={{color:"var(--rust)"}}>X · {goal.toLocaleString()} GHC</span>
+            </div>
+          </div>
+
+          {/* SHARE VOYAGE — directly under the progress bar */}
+          <div className="mt-5 flex justify-center">
+            <button
+              className="pixel-btn"
+              onClick={shareVoyage}
+              onPointerEnter={() => audio.play("ui_hover")}
+              style={{ fontSize: 12, padding: "14px 20px", letterSpacing: 2 }}
+            >
+              ⚓ SHARE VOYAGE
+            </button>
+          </div>
+
+          {/* Milestone badges */}
+          <div className="grid grid-cols-4 gap-2 md:gap-3 mt-5">
+            {MILESTONES.map(m => {
+              const got = reachedMilestones.includes(m.pct);
+              return (
+                <div key={m.pct} style={{
+                  background: got ? "#1a3553" : "#0a1626",
+                  boxShadow: got
+                    ? "inset 0 0 0 2px var(--gold), 0 0 0 2px #000"
+                    : "inset 0 0 0 2px #2c537a, 0 0 0 2px #000",
+                  padding: "10px",
+                  textAlign: "center",
+                  opacity: got ? 1 : .6,
+                }}>
+                  <div style={{ fontSize: 26, lineHeight: 1, filter: got? "none":"grayscale(1)" }}>{m.emoji}</div>
+                  <div className="pixel-h text-[8px] mt-2" style={{ color: got ? "var(--gold-hi)" : "#6f93b8" }}>{m.label}</div>
+                  <div className="pixel-h text-[8px] mt-1" style={{ color: got ? "var(--gold)" : "#4a6b8c" }}>{m.pct}%</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* FOOTER */}
+        <div className="mt-6 flex items-center justify-between pixel-panel p-3 md:p-4">
+          <div className="pixel-h text-[8px]" style={{color:"#6f93b8"}}>
+            PRESS  ANY  CELL  TO  STOW  TREASURE  ·  STATE  SAVES  AUTO
+          </div>
+          <div className="qr" title="local save active"/>
+        </div>
+
+        <div className="mt-3 pixel-h text-[8px] text-center" style={{color:"#3a5876"}}>
+          © {new Date().getFullYear()} ·  ORIGINAL  PIRATE  CREW  ·  NOT  AFFILIATED  WITH  ANY  BRAND
+        </div>
+      </div>
+
+      {/* Overlays */}
+      <CrewPopup popup={popup}/>
+      <FloatChip chip={chip}/>
+      <MilestoneBanner banner={banner}/>
+      <Confetti active={confettiOn}/>
+      <GrandFinale active={grandFinale} goal={goal} onDismiss={() => { setGrandFinale(false); setConfettiOn(false); }}/>
+      <PixelToast message={toast}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
